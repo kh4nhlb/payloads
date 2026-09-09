@@ -8,3 +8,6 @@ Origin: http://10.30.132.65:8602
 Connection: close
 Referer: http://10.30.132.65:8602/
 X-PwnFox-Color: green
+
+
+GET /graphql?_start=1&query=query+%7b%0d%0a++comment%28id%3a420%29+%7b%0d%0a++++++content%0d%0a++++++++++user%7b%0d%0a++++++++++++id%0d%0a++++++++++++++username%0d%0a++++++++++++++email%0d%0a++++++++++++meta_data%0d%0a++++++++%7d%0d%0a++++++%0d%0a++++%7d%0d%0a++%0d%0a%7d%0d%0a HTTP/1.1
