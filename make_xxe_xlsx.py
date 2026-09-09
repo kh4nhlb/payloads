@@ -10,4 +10,4 @@ Referer: http://10.30.132.65:8602/
 X-PwnFox-Color: green
 
 
-GET /graphql?_start=1&query=query+%7b%0d%0a++comment%28id%3a420%29+%7b%0d%0a++++++content%0d%0a++++++++++user%7b%0d%0a++++++++++++id%0d%0a++++++++++++++username%0d%0a++++++++++++++email%0d%0a++++++++++++meta_data%0d%0a++++++++%7d%0d%0a++++++%0d%0a++++%7d%0d%0a++%0d%0a%7d%0d%0a HTTP/1.1
+GET /graphql?query=query+%7b%0d%0a++catStaffs+%7b%0d%0a++++id%0d%0a++++staff_code%0d%0a++++user_name%0d%0a++++full_name%0d%0a++++email%0d%0a++++phone%0d%0a++++position%0d%0a++%7d%0d%0a%7d%0d%0a HTTP/1.1
