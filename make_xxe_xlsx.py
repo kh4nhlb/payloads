@@ -156,9 +156,12 @@ for path in CHECK_PATHS:
 
 
 def main():
-    # Tìm kian.zip cùng thư mục với script
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    default_source = os.path.join(script_dir, "kian.zip")
+    # Ưu tiên: thư mục kian/ → kian.zip → báo lỗi
+    if os.path.isdir(os.path.join(script_dir, "kian")):
+        default_source = os.path.join(script_dir, "kian")
+    else:
+        default_source = os.path.join(script_dir, "kian.zip")
 
     parser = argparse.ArgumentParser(description="Zip Slip full payload — copy KIAN gốc + path traversal")
     parser.add_argument("--source",  default=default_source,
